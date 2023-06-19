@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <link href="https://fonts.googleapis.com/css?family=Roboto:100,300,400,500,700,900" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/@mdi/font@6.x/css/materialdesignicons.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/vuetify@2.x/dist/vuetify.min.css" rel="stylesheet" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, minimal-ui" />
+</head>
+
+<style>
+  .bg {
+    background-color: rgb(241, 241, 241);
+  }
+
+  .bg-white {
+    background-color: rgb(255, 255, 255);
+  }
+
+  .bg-code {
+    background-color: rgb(52, 52, 52);
+  }
+</style>
+
+<body>
+  <div id="app">
+    <v-app>
+      <v-main class="bg">
+        <div>
+          <br />
+          <h2 class="text-center">LDB Bank QR Payment and Deeplink Payment Document</h2>
+
+          <v-container>
+            <v-card>
+              <v-card-text>
+                <h2>Document Connect API</h2>
+                <br>
+                <object width="100%" height="700px" data="Product_LDB_Deeplink_API_Spec(Prod).pdf"></object>
+
+                <br />
+                <br>
+                <h2 class="text-center">Example Generate QR Code Payment</h2>
+                <br>
+                <v-row justify="center">
+                  <v-col cols="12" md="5">
+                    <v-text-field v-model="mchId" label="Merchant ID" placeholder="Create by LDB Bank" outlined>
+                    </v-text-field>
+                    <v-text-field v-model="mchRef" label="Merchant Ref"
+                      placeholder="Referent Id (please define as unique key)" outlined></v-text-field>
+                    <v-text-field v-model="amount" label="Amount" placeholder="Amount" outlined></v-text-field>
+                    <v-text-field v-model="desc" label="Desc" placeholder="Desc" outlined></v-text-field>
+                    <v-text-field v-model="linkBack" label="Link Back"
+                      placeholder="send the link back app after transaction success" outlined></v-text-field>
+
+                    <br />
+                    <v-btn color="primary" @click="getLink()" block>Get Link</v-btn>
+                    <br />
+                    <!-- <v-divider></v-divider> -->
+                  </v-col>
+                  <v-col cols="12" md="4">
+                    <v-container v-if="qr_data != null">
+                      <v-layout align-center>
+                        <v-flex>
+                          <v-sheet v-if="loading == true" :color="`grey ${theme.isDark ? 'darken-2' : 'lighten-4'}`"
+                            class="pa-3">
+                            <v-skeleton-loader class="mx-auto" max-width="300" type="card"></v-skeleton-loader>
+                          </v-sheet>
+                          <v-card v-if="pay_status == false">
+                            <v-card-text>
+                              <v-img class="auto" :src="qr_data"></v-img>
+                              <br />
+                              <v-btn color="primary" @click="openDeepLink()" block>Payment</v-btn>
+                              <br>
+                              <v-btn color="success" @click="callBack()" block>Check Payment</v-btn>
+                            </v-card-text>
+                          </v-card>
+
+                          <v-card v-if="pay_status == true">
+                            <v-card-text class="text-center">
+                              <v-icon class="success--text" size="50">mdi-check-circle-outline</v-icon>
+                              <h4 class="success--text">Payment Success</h4>
+                              <code>
+                                {{ data_res }}
+                              </code>
+                            </v-card-text>
+                          </v-card>
+                        </v-flex>
+                      </v-layout>
+                    </v-container>
+                  </v-col>
+                </v-row>
+
+                <h2>Flutter Library</h2>
+                <br>
+                <p>flutter pub add ldb_qr_payment</p>
+                <a href="https://pub.dev/packages/ldb_qr_payment" target="_blank"
+                  rel="noopener noreferrer">ldb_qr_paymen</a>
+                <br>
+                <br><br>
+                <h2>Subscribe Callback Realtime with PubNub</h2>
+                <br>
+                <p>Example code with dart flutter</p>
+                <pre class="bg-code success--text">
+                  void checkPaymentRealtime()async{
+                    final refCheck = 'merchId-$merchId-refNumber-$merchRef';
+                    var pubnub = PubNub(
+                      defaultKeyset: Keyset(
+                        subscribeKey: 'sub-c-e8e87ff5-d6ac-4746-89fa-a61636721cbd',
+                        uuid: const UUID('LDBBANK'),
+                      ),
+                    );
+                    // Subscribe to a channel
+                    var subscription =
+                    pubnub.subscribe(channels: {refCheck});
+                    subscription.messages.listen((envelope) async {
+                      setState(() async{
+                        print('LDB Res = ${envelope.payload}');
+                        dataResponseRealtime = envelope.payload.toString();
+                        await subscription.dispose();
+                      });
+                    });
+                  }
+                </pre>
+              </v-card-text>
+            </v-card>
+
+          </v-container>
+        </div>
+
+        <v-dialog v-model="dialog" persistent max-width="290">
+          <v-card>
+            <v-card-title class="text-h5">
+              Qr No Payment
+            </v-card-title>
+            <v-card-text>{{ msg }}</v-card-text>
+            <v-card-actions>
+              <v-spacer></v-spacer>
+              <v-btn color="green darken-1" text @click="dialog = false">
+                OK
+              </v-btn>
+            </v-card-actions>
+          </v-card>
+        </v-dialog>
+
+      </v-main>
+    </v-app>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/vue@2.x/dist/vue.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vuetify@2.x/dist/vuetify.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.18.0/axios.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/node-forge@1.0.0/dist/forge.min.js"></script>
+
+  <script>
+    new Vue({
+      el: "#app",
+      vuetify: new Vuetify(),
+      data() {
+        return {
+          loading: false,
+          pay_status: false,
+          dialog: false,
+          theme: {
+            default: { isDark: false },
+          },
+          ldb_token: null,
+          mchId: "LDB0302000001",
+          mchRef: "pitix99",
+          amount: "1000",
+          desc: "ldbpay",
+          linkBack: "https://preh5.newpay.la/scale/success.html",
+          urlCallBack: "https://app.shoping.com/?status=success",
+          additional: "TRUST-TEST-XXX",
+          qr_data: null,
+          link_data: null,
+          msg: '',
+          data_res: []
+        };
+      },
+      mounted() { },
+      methods: {
+        // for get token authentication
+        async getToken() {
+          var bodyFormData = new FormData();
+          bodyFormData.append("grant_type", "client_credentials");
+          await axios
+            .post(
+              "https://dehome.ldblao.la/ldbpay/v1/authService/token",
+              bodyFormData,
+              {
+                headers: {
+                  "Content-type": "application/json",
+                },
+                auth: {
+                  username: "APPLINK",
+                  password: "T2C%tL81oxN3N!H5Aby9",
+                },
+              }
+            )
+            .then((response) => {
+              this.ldb_token = response.data.access_token;
+              console.log("token == ", response.data);
+            })
+            .catch((err) => {
+              console.log(err);
+            });
+        },
+        // for get link and get Qr code payment
+        async getLink() {
+          this.loading = true;
+          var data = {
+            merchId: this.mchId,
+            merchRef: this.mchRef,
+            amount: this.amount,
+            additional: this.additional,
+            urlBack: this.linkBack,
+            urlCallBack: this.urlCallBack,
+            remark: this.desc,
+          };
+          console.log("data send to create link = ", data);
+          await this.getToken();
+          await axios
+            .post(
+              "https://dehome.ldblao.la/ldbpay/v1/payment/getLink.service",
+              data,
+              {
+                headers: {
+                  "Content-type": "application/json",
+                  Authorization: "Bearer " + this.ldb_token,
+                },
+              }
+            )
+            .then((response) => {
+              console.log(response.data);
+              if (response.data.status == "00") {
+                this.loading = false;
+                this.pay_status = false;
+                this.qr_data = response.data.dataResponse.qr;
+                this.link_data = response.data.dataResponse.link;
+
+              } else {
+                console.log(response.data);
+              }
+            })
+            .catch((err) => {
+              console.log(err);
+            });
+        },
+
+        openDeepLink() {
+          window.open(this.link_data);
+        },
+
+        // for check transaction payment
+        async callBack() {
+          // setInterval(async () => {
+          var dataBody = {
+            merchId: this.mchId,
+            refNumber: this.mchRef,
+          };
+
+          //for encrypt body ===========================================================================
+          var pki = forge.pki;
+          var pem = `
+    -----BEGIN PUBLIC KEY-----
+    MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEApL8zynFJXiS1+tZpgBaF
+bVeITB2951zYSq1/9yVTFXelAoBA+8t2D38GsJDoQi/sIdxDYRmO4TDAoFTIOHqm
+NNQBZTSGnr4jf7VarIF4nK3aFH+sJq1noCiHPHvPZTC3kwl4kX+d3pbs0zO50ZYn
+bTV/8/QoeOJOgwbw8890FKShv4pEA8FAydB6HYJIjqI3HzYWz1NibR3sud6fmbkx
+iMpIbjTJNDmXGU5/vH4pb8ofiHbXOa4iDWNUUmg1LUXUQuZQOW/Pr+JAUGoDcI3d
+LIYVdThJNYdmVnUntEwU3+jcG0J9FUbZNU9fODeimjckDGUGgSranL8+rzaKog64
+jwIDAQAB
+    -----END PUBLIC KEY-----`;
+          // convert a PEM-formatted public key to a Forge public key
+          var publicKey = pki.publicKeyFromPem(pem);
+          var text = `{\"merchId\":\"${this.mchId}\",\"refNumber\":\"${this.mchRef}\"}`;
+          const encrypted = publicKey.encrypt(text);
+          const dataEncrypt = `keyId="APPLINK",signature="${forge.util.encode64(encrypted)}"`;
+          console.log("encrypted: ", dataEncrypt);
+          //for encrypt body ==============================================================================
+          axios
+            .post(
+              "https://dehome.ldblao.la/ldbpay/v1/payment/enquiry.service",
+              dataBody,
+              {
+                headers: {
+                  'Content-type': 'application/json',
+                  'ldb-Signature': dataEncrypt,
+                  Authorization: "Bearer " + this.ldb_token,
+                },
+              }
+            )
+            .then((response) => {
+              console.log("Check Call Back", response.data);
+              if (response.data.status == "00") {
+                this.pay_status = true;
+                this.data_res = response.data.dataResponse;
+              } else {
+                this.msg = response.data.message;
+                this.pay_status = false;
+                this.dialog = true;
+              }
+            })
+            .catch((err) => {
+              console.log('LDB ERROR: ', err);
+              this.pay_status = false;
+            });
+          /// sign verify ldb key ========================================
+          // }, 3000);
+        },
+      },
+    });
+  </script>
+</body>
+
+</html>
+
+<!-- Develop Product by Team Mobile Division -->
+<!-- =============  code encrypt for nodejs ============ -->
+<!--
+  const path = require("path");
+  const fs = require("fs");
+  const forge = require("node-forge");
+
+function encryptStringWithRsaPublicKey(text) {
+    const absolutePath = path.resolve('public.pem');
+    const publicKeyFile = fs.readFileSync(absolutePath, 'utf-8');
+
+    var pki = forge.pki;
+    // convert a PEM-formatted public key to a Forge public key
+    var publicKey = pki.publicKeyFromPem(publicKeyFile);
+    const encrypted = publicKey.encrypt(text);
+    console.log("encrypted:", forge.util.encode64(encrypted));
+
+    return forge.util.encode64(encrypted);
+};
+
+-->
